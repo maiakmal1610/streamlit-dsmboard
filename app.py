@@ -59,7 +59,8 @@ with tab1:
     selected_entity = st.selectbox("Choose Entity", df_dsm_dsl['Entity'].unique())
 
     # Dropdown for choosing Date
-    selected_year = st.selectbox("Choose Year", sorted(data_latest_progress['Year'].unique()))
+    selected_year = st.selectbox("Choose Year", sorted(list(data_latest_progress['Year'].unique())))
+
 
     # Filter data based on the selected entity and year
     dsm_data = df_dsm_dsl[df_dsm_dsl['Entity'] == selected_entity]
