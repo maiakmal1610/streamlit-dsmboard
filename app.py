@@ -1,5 +1,4 @@
 import streamlit as st
-import matplotlib.pyplot as plt
 import plotly.express as px
 import pandas as pd
 import numpy as np
@@ -341,22 +340,31 @@ with tab_time:
             # Group by Year and Type
             if selected_entity == 'All Entities':
                 chart_data = filtered_df.groupby(['Year', 'Type'], as_index=False)['Progress'].mean()
-                chart_data['Date'] = pd.to_datetime(chart_data['Year'], format='%Y')
+                chart_data['Date_Display'] = pd.to_datetime(chart_data['Year'], format='%Y')
             else:
                 chart_data = filtered_df.groupby(['Year', 'Entity', 'Type'], as_index=False)['Progress'].mean()
-                chart_data['Date'] = pd.to_datetime(chart_data['Year'], format='%Y')
+                chart_data['Date_Display'] = pd.to_datetime(chart_data['Year'], format='%Y')
             
             x_axis = 'Year'
         else:  # Monthly
-            # Use the actual dates
+            # Use the actual dates for monthly view
             if selected_entity == 'All Entities':
-                # Group by month and year
-                chart_data = filtered_df.groupby([filtered_df['Date'].dt.to_period('M'), 'Type'], as_index=False)['Progress'].mean()
-                chart_data['Date'] = chart_data['Date'].dt.to_timestamp()
+                # Group by year and month
+                chart_data = filtered_df.groupby([
+                    filtered_df['Year'], 
+                    filtered_df['Month'], 
+                    'Type'
+                ], as_index=False)['Progress'].mean()
+                
+                # Create proper date column for display
+                chart_data['Date_Display'] = pd.to_datetime(
+                    chart_data['Year'].astype(str) + '-' + chart_data['Month'].astype(str) + '-01'
+                )
             else:
-                chart_data = filtered_df
+                chart_data = filtered_df.copy()
+                chart_data['Date_Display'] = chart_data['Date']
             
-            x_axis = 'Date'
+            x_axis = 'Date_Display'
 
         fig_line = px.line(
             chart_data,
@@ -365,7 +373,7 @@ with tab_time:
             color='Type',
             markers=True,
             title=title,
-            labels={'Progress': 'Progress (%)', 'Date': 'Date'},
+            labels={'Progress': 'Progress (%)', 'Date_Display': 'Date', 'Year': 'Year'},
             height=500
         )
         
