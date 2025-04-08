@@ -3,9 +3,7 @@ import matplotlib.pyplot as plt
 import plotly.express as px
 import pandas as pd
 
-st.set_page_config(layout="wide")
-
-# --- Data Preparation ---
+# Sample data (same as before)
 data_dsm_dsl = {
     'Entity': ['BP', 'TK', 'PP', 'UB'],
     'DSM Progress': [80, 70, 90, 85],
@@ -13,106 +11,98 @@ data_dsm_dsl = {
 }
 
 data_latest_progress = {
-    'Year': list(range(2020, 2026)) * 4,
+    'Year': [2020, 2021, 2022, 2023, 2024, 2025,
+             2020, 2021, 2022, 2023, 2024, 2025,
+             2020, 2021, 2022, 2023, 2024, 2025,
+             2020, 2021, 2022, 2023, 2024, 2025],
     'Entity': ['BP'] * 6 + ['TK'] * 6 + ['PP'] * 6 + ['UB'] * 6,
     'Type': ['DSM'] * 24,
-    'Progress': [
-        60, 65, 70, 75, 80, 85,  # BP
-        50, 55, 60, 65, 70, 75,  # TK
-        70, 75, 80, 85, 90, 95,  # PP
-        65, 70, 75, 80, 85, 90   # UB
-    ]
+    'Progress': [60, 65, 70, 75, 80, 85,  # BP
+                 50, 55, 60, 65, 70, 75,  # TK
+                 70, 75, 80, 85, 90, 95,  # PP
+                 65, 70, 75, 80, 85, 90]   # UB
 }
 
 data_latest_progress_dsl = {
-    'Year': list(range(2020, 2026)) * 4,
+    'Year': [2020, 2021, 2022, 2023, 2024, 2025,
+             2020, 2021, 2022, 2023, 2024, 2025,
+             2020, 2021, 2022, 2023, 2024, 2025,
+             2020, 2021, 2022, 2023, 2024, 2025],
     'Entity': ['BP'] * 6 + ['TK'] * 6 + ['PP'] * 6 + ['UB'] * 6,
     'Type': ['DSL'] * 24,
-    'Progress': [
-        55, 60, 65, 70, 75, 80,  # BP
-        45, 50, 55, 60, 65, 70,  # TK
-        65, 70, 75, 80, 85, 90,  # PP
-        60, 65, 70, 75, 80, 85   # UB
-    ]
+    'Progress': [55, 60, 65, 70, 75, 80,  # BP
+                 45, 50, 55, 60, 65, 70,  # TK
+                 65, 70, 75, 80, 85, 90,  # PP
+                 60, 65, 70, 75, 80, 85]   # UB
 }
 
-data_entity_progress = {
-    'Entity': ['BP', 'TK', 'PP', 'UB'],
-    'Progress %': [80, 70, 90, 85]
-}
-
-# Convert to DataFrames
+# Convert data to DataFrame
 df_dsm_dsl = pd.DataFrame(data_dsm_dsl)
-df_entity_progress = pd.DataFrame(data_entity_progress)
-df_combined_progress = pd.concat([
+df_entity_progress = pd.DataFrame(data_dsm_dsl)
+
+# Combine DSM and DSL data
+data_latest_progress_combined = pd.concat([
     pd.DataFrame(data_latest_progress),
     pd.DataFrame(data_latest_progress_dsl)
 ])
 
-# --- Dashboard ---
-st.title("📊 DSM & DSL Dashboard")
+# Streamlit app
+st.title("Dashboard")
 
-tab_overview, tab_time, tab_compare = st.tabs(["🔍 Overview", "📈 Progress Over Time", "📊 Comparison"])
+# Tab for combined view
+tab1, tab2, tab3 = st.tabs(["Combined View", "Latest Progress Comparison", "Bar Chart for Comparison"])
 
-# --- Tab 1: Overview ---
-with tab_overview:
-    st.subheader("Overall Progress Summary")
+with tab1:
+    st.subheader("Current Progress - DSM vs DSL")
 
-    # KPI Cards
-    avg_dsm = df_dsm_dsl['DSM Progress'].mean()
-    avg_dsl = df_dsm_dsl['DSL Progress'].mean()
-    top_entity = df_entity_progress.loc[df_entity_progress['Progress %'].idxmax()]
+    # Dropdown for choosing Entity
+    selected_entity = st.selectbox("Choose Entity", df_dsm_dsl['Entity'].unique())
 
-    col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
-    col_kpi1.metric("📈 Avg DSM Progress", f"{avg_dsm:.1f}%")
-    col_kpi2.metric("📉 Avg DSL Progress", f"{avg_dsl:.1f}%")
-    col_kpi3.metric("🏆 Top Entity", f"{top_entity['Entity']} ({top_entity['Progress %']}%)")
+    # Dropdown for choosing Date
+    selected_year = st.selectbox("Choose Year", sorted(data_latest_progress['Year'].unique()))
 
-    col1, col2 = st.columns([1, 1])
+    # Filter data based on the selected entity and year
+    dsm_data = df_dsm_dsl[df_dsm_dsl['Entity'] == selected_entity]
+    dsl_data = df_entity_progress[df_entity_progress['Entity'] == selected_entity]
 
-    with col1:
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.bar(df_dsm_dsl['Entity'], df_dsm_dsl['DSM Progress'], label='DSM')
-        ax.bar(df_dsm_dsl['Entity'], df_dsm_dsl['DSL Progress'],
-               bottom=df_dsm_dsl['DSM Progress'], label='DSL')
-        ax.set_xlabel('Entity')
-        ax.set_ylabel('Progress (%)')
-        ax.set_title("DSM + DSL Stacked Progress")
-        ax.legend()
-        st.pyplot(fig)
+    # Get the latest progress for DSM and DSL for the selected year
+    latest_dsm = data_latest_progress_combined[(data_latest_progress_combined['Entity'] == selected_entity) &
+                                               (data_latest_progress_combined['Year'] == selected_year) &
+                                               (data_latest_progress_combined['Type'] == 'DSM')]['Progress'].values[0]
+    latest_dsl = data_latest_progress_combined[(data_latest_progress_combined['Entity'] == selected_entity) &
+                                               (data_latest_progress_combined['Year'] == selected_year) &
+                                               (data_latest_progress_combined['Type'] == 'DSL')]['Progress'].values[0]
 
-    with col2:
-        fig2 = px.bar(df_entity_progress, x='Entity', y='Progress %',
-                      title="Overall Progress by Entity", height=400)
-        st.plotly_chart(fig2, use_container_width=True)
+    # Plotting the horizontal bar chart for DSM vs DSL
+    fig, ax = plt.subplots(figsize=(8, 4))
 
-# --- Tab 2: Progress Over Time ---
-with tab_time:
-    st.subheader("📈 Progress Over Time")
-    selected_entity = st.selectbox("Select an Entity:", df_dsm_dsl['Entity'].unique(), key="time_entity")
+    # Bar chart with horizontal bars
+    ax.barh(selected_entity, latest_dsm, color='blue', label='DSM', align='center')
+    ax.barh(selected_entity, latest_dsl, color='orange', left=latest_dsm, label='DSL', align='center')
 
-    filtered_df = df_combined_progress[df_combined_progress['Entity'] == selected_entity]
+    # Labels and title
+    ax.set_xlabel('Progress (%)')
+    ax.set_title(f"DSM vs DSL Progress for {selected_entity} in {selected_year}")
+    ax.legend()
 
-    fig_line = px.line(filtered_df,
-                       x='Year', y='Progress',
-                       color='Type',
-                       markers=True,
-                       title=f"{selected_entity} - DSM vs DSL Progress Over Time",
-                       labels={'Progress': 'Progress (%)'},
-                       height=500)
+    # Display the plot
+    st.pyplot(fig)
+
+with tab2:
+    st.write("### Latest Progress Comparison")
+    fig_line = px.line(data_latest_progress_combined, x='Year', y='Progress', color='Type', facet_row='Entity')
     st.plotly_chart(fig_line, use_container_width=True)
 
-# --- Tab 3: Comparison ---
-with tab_compare:
-    st.subheader("📊 DSM vs DSL Comparison")
-    selected_entity_bar = st.selectbox("Select an Entity:", df_dsm_dsl['Entity'].unique(), key="compare_entity")
-
-    filtered_df_bar = df_combined_progress[df_combined_progress['Entity'] == selected_entity_bar]
-
-    fig_bar = px.bar(filtered_df_bar,
-                     x='Year', y='Progress', color='Type',
-                     barmode='group',
-                     title=f"{selected_entity_bar} - DSM vs DSL Grouped Comparison",
-                     labels={'Progress': 'Progress (%)'},
-                     height=500)
+with tab3:
+    st.write("### Bar Chart for Comparison")
+    fig_bar = px.bar(
+        data_latest_progress_combined,
+        x='Year',
+        y='Progress',
+        color='Type',
+        barmode='group',  
+        facet_row='Entity',  
+        title="DSM vs DSL Progress Over Time",
+        labels={'Progress': 'Progress (%)'}
+    )
     st.plotly_chart(fig_bar, use_container_width=True)
