@@ -264,7 +264,7 @@ with tab_comparison:
                 st.metric(
                     f"{row['Entity']} Gap",
                     f"{row['DSL_DSM_Gap']:,}",
-                    f"{row['Gap_Percentage']}%",
+                    row["Gap_Percentage"],
                     delta_color=delta_color,
                     help=f"Difference between DSL ({row['DSL']:,}) and DSM ({row['DSM']:,}) counts"
                 )
