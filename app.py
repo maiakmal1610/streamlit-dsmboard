@@ -1,471 +1,508 @@
 import streamlit as st
 import plotly.express as px
+import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Set page configuration
-st.set_page_config(layout="wide", page_title="DSM & DSL Dashboard")
+st.set_page_config(layout="wide", page_title="Entity Tracking Dashboard")
 
-# Function to load data - better for organization and error handling
+# Function to load data - in a real scenario, this would pull from your database
 @st.cache_data
 def load_data():
     try:
-        # --- Data Preparation ---
-        data_dsm_dsl = {
-            'Entity': ['BP', 'TK', 'PP', 'UB'],
-            'DSM Progress': [80, 70, 90, 85],
-            'DSL Progress': [75, 65, 80, 80]
+        # --- Generate sample data ---
+        # Create entities
+        entities = ['BP', 'UB', 'TK', 'PP']
+        
+        # Create base entity counts
+        entity_counts = {
+            'BP': {'total': 1250, 'dsl': 1200, 'dsm': 1050},
+            'UB': {'total': 950, 'dsl': 900, 'dsm': 820},
+            'TK': {'total': 1500, 'dsl': 1450, 'dsm': 1100},  # Significant DSM shortfall
+            'PP': {'total': 780, 'dsl': 760, 'dsm': 730}
         }
-
-        data_latest_progress = {
-            'Year': list(range(2020, 2026)) * 4,
-            'Entity': ['BP'] * 6 + ['TK'] * 6 + ['PP'] * 6 + ['UB'] * 6,
-            'Type': ['DSM'] * 24,
-            'Progress': [
-                60, 65, 70, 75, 80, 85,  # BP
-                50, 55, 60, 65, 70, 75,  # TK
-                70, 75, 80, 85, 90, 95,  # PP
-                65, 70, 75, 80, 85, 90   # UB
-            ]
-        }
-
-        data_latest_progress_dsl = {
-            'Year': list(range(2020, 2026)) * 4,
-            'Entity': ['BP'] * 6 + ['TK'] * 6 + ['PP'] * 6 + ['UB'] * 6,
-            'Type': ['DSL'] * 24,
-            'Progress': [
-                55, 60, 65, 70, 75, 80,  # BP
-                45, 50, 55, 60, 65, 70,  # TK
-                65, 70, 75, 80, 85, 90,  # PP
-                60, 65, 70, 75, 80, 85   # UB
-            ]
-        }
-
-        # Create exact dates for more granular date selection
-        # Create a list of dates (monthly for each year)
-        all_dates = []
-        for year in range(2020, 2026):
-            for month in range(1, 13):
-                # Skip future months in 2025
-                if year == 2025 and month > 4:  # Assuming current date is April 2025
-                    continue
-                all_dates.append(datetime(year, month, 1))
         
-        # Create time-based data with proper dates
-        time_based_data = []
+        # Create history data (daily for last 30 days)
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=180)
+        date_range = pd.date_range(start=start_date, end=end_date, freq='D')
         
-        entities = ['BP', 'TK', 'PP', 'UB']
+        history_data = []
         
-        # Starting values
-        start_values_dsm = {'BP': 55, 'TK': 45, 'PP': 65, 'UB': 60}
-        start_values_dsl = {'BP': 50, 'TK': 40, 'PP': 60, 'UB': 55}
+        # Starting values - percentage of current totals
+        starting_pct = 0.80  # Starting with 80% of current values
         
-        # Generate monthly progress data
         for entity in entities:
-            dsm_progress = start_values_dsm[entity]
-            dsl_progress = start_values_dsl[entity]
+            total_count = entity_counts[entity]['total']
+            dsl_count = entity_counts[entity]['dsl']
+            dsm_count = entity_counts[entity]['dsm']
             
-            for date in all_dates:
-                # Add small monthly increases with some randomness
-                dsm_progress += np.random.uniform(0.3, 0.7)
-                dsl_progress += np.random.uniform(0.2, 0.6)
+            # Entity growth rate - slightly different for each entity
+            growth_rates = {'BP': 0.0012, 'UB': 0.0010, 'TK': 0.0015, 'PP': 0.0008}
+            
+            # DSL vs DSM ratios - TK has more divergence
+            dsm_ratios = {'BP': 0.9, 'UB': 0.92, 'TK': 0.76, 'PP': 0.95}
+            
+            current_total = total_count * starting_pct
+            current_dsl = dsl_count * starting_pct
+            current_dsm = dsm_count * starting_pct
+            
+            for date in date_range:
+                # Add daily growth with some randomness
+                growth_factor = 1 + growth_rates[entity] + np.random.uniform(-0.0005, 0.0005)
+                current_total *= growth_factor
                 
-                # Add DSM record
-                time_based_data.append({
-                    'Date': date,
-                    'Year': date.year,
-                    'Month': date.month,
-                    'Entity': entity,
-                    'Type': 'DSM',
-                    'Progress': min(round(dsm_progress, 1), 100)  # Cap at 100%
-                })
+                # DSL grows at the same rate
+                current_dsl *= growth_factor
                 
-                # Add DSL record
-                time_based_data.append({
+                # DSM grows similarly but with entity-specific ratio differences
+                # For TK specifically, make DSM growth lag behind significantly
+                if entity == 'TK':
+                    dsm_growth = growth_factor * dsm_ratios[entity] * (0.95 + 0.05 * np.random.random())
+                else:
+                    dsm_growth = growth_factor * dsm_ratios[entity] * (0.98 + 0.02 * np.random.random())
+                
+                current_dsm *= dsm_growth
+                
+                # Record values (rounded to integers)
+                history_data.append({
                     'Date': date,
-                    'Year': date.year,
-                    'Month': date.month,
                     'Entity': entity,
-                    'Type': 'DSL',
-                    'Progress': min(round(dsl_progress, 1), 100)  # Cap at 100%
+                    'Total': int(current_total),
+                    'DSL': int(current_dsl),
+                    'DSM': int(current_dsm),
+                    'DSL_DSM_Gap': int(current_dsl - current_dsm)
                 })
+        
+        # Create current snapshot
+        current_data = []
+        for entity in entities:
+            current_data.append({
+                'Entity': entity,
+                'Total': entity_counts[entity]['total'],
+                'DSL': entity_counts[entity]['dsl'],
+                'DSM': entity_counts[entity]['dsm'],
+                'DSL_DSM_Gap': entity_counts[entity]['dsl'] - entity_counts[entity]['dsm']
+            })
         
         # Convert to DataFrames
-        df_dsm_dsl = pd.DataFrame(data_dsm_dsl)
+        df_current = pd.DataFrame(current_data)
+        df_history = pd.DataFrame(history_data)
         
-        # Create a derived dataframe for entity total progress (average of DSM and DSL)
-        df_entity_progress = pd.DataFrame({
-            'Entity': df_dsm_dsl['Entity'],
-            'Progress %': np.round((df_dsm_dsl['DSM Progress'] + df_dsm_dsl['DSL Progress']) / 2, 1)
-        })
+        # Create melt version for some charts
+        df_current_melted = pd.melt(
+            df_current,
+            id_vars=['Entity'],
+            value_vars=['DSL', 'DSM'],
+            var_name='Interface',
+            value_name='Count'
+        )
         
-        # Combine time series data
-        df_combined_progress = pd.concat([
-            pd.DataFrame(data_latest_progress),
-            pd.DataFrame(data_latest_progress_dsl)
-        ])
-        
-        # Add the time-based detailed dataframe
-        df_time_based = pd.DataFrame(time_based_data)
-        
-        return df_dsm_dsl, df_entity_progress, df_combined_progress, df_time_based
+        return df_current, df_history, df_current_melted
     
     except Exception as e:
         st.error(f"Error loading data: {e}")
-        return None, None, None, None
-
-# Function to get data for a specific date
-def get_data_for_date(df, selected_date):
-    # Filter data up to the selected date
-    filtered_df = df[df['Date'] <= selected_date]
-    
-    # Get the latest record for each Entity and Type combination
-    latest_data = filtered_df.sort_values('Date').groupby(['Entity', 'Type']).last().reset_index()
-    
-    # Create a comparison dataframe in the format we need
-    dsm_data = latest_data[latest_data['Type'] == 'DSM'].copy()
-    dsl_data = latest_data[latest_data['Type'] == 'DSL'].copy()
-    
-    # Rename for merging
-    dsm_data = dsm_data.rename(columns={'Progress': 'DSM Progress'})
-    dsl_data = dsl_data.rename(columns={'Progress': 'DSL Progress'})
-    
-    # Keep only needed columns
-    dsm_data = dsm_data[['Entity', 'DSM Progress']]
-    dsl_data = dsl_data[['Entity', 'DSL Progress']]
-    
-    # Merge
-    result_df = pd.merge(dsm_data, dsl_data, on='Entity')
-    
-    return result_df
+        return None, None, None
 
 # Load data
-df_dsm_dsl, df_entity_progress, df_combined_progress, df_time_based = load_data()
+df_current, df_history, df_current_melted = load_data()
 
 # --- Dashboard ---
-st.title("📊 DSM & DSL Dashboard")
+st.title("📊 Entity Tracking Dashboard")
+st.caption("Monitoring entities (BP, UB, TK, PP) across DSL (Listing) and DSM (Map) interfaces")
 
 # Create tabs
-tab_overview, tab_time, tab_compare = st.tabs(["🔍 Overview", "📈 Progress Over Time", "📊 Comparison"])
+tab_overview, tab_comparison, tab_history = st.tabs([
+    "📋 Overall Counts", 
+    "🔄 DSL vs DSM", 
+    "📈 Historical Trends"
+])
 
-# --- Tab 1: Overview ---
+# --- Tab 1: Overall Entity Counts ---
 with tab_overview:
-    st.subheader("Overall Progress Summary")
+    st.header("Entity Counts Overview")
 
-    # Error handling
-    if df_dsm_dsl is not None and df_entity_progress is not None and df_time_based is not None:
-        # Date selection
-        col_view_type, col_date = st.columns([1, 2])
+    if df_current is not None:
+        # Calculate totals for metrics
+        total_entities = df_current['Total'].sum()
+        most_common = df_current.loc[df_current['Total'].idxmax()]['Entity']
+        most_common_count = df_current.loc[df_current['Total'].idxmax()]['Total']
+        least_common = df_current.loc[df_current['Total'].idxmin()]['Entity']
+        least_common_count = df_current.loc[df_current['Total'].idxmin()]['Total']
         
-        with col_view_type:
-            view_type = st.radio("View Progress:", ["Latest Progress", "Historical Progress"])
+        # KPI metrics
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Entities", f"{total_entities:,}")
+        col2.metric("Most Common", f"{most_common} ({most_common_count:,})")
+        col3.metric("Least Common", f"{least_common} ({least_common_count:,})")
+        col4.metric("Entity Types", len(df_current))
         
-        if view_type == "Historical Progress":
-            with col_date:
-                # Get min and max dates from the dataframe
-                min_date = df_time_based['Date'].min()
-                max_date = df_time_based['Date'].max()
-                
-                # Default to 6 months ago
-                default_date = max_date - pd.DateOffset(months=6)
-                if default_date < min_date:
-                    default_date = min_date
-                
-                selected_date = st.date_input(
-                    "Select Date:", 
-                    value=default_date,
-                    min_value=min_date.date(),
-                    max_value=max_date.date()
-                )
-                
-                # Convert to datetime for filtering
-                selected_datetime = datetime.combine(selected_date, datetime.min.time())
-                
-                # Get data for the selected date
-                historical_df = get_data_for_date(df_time_based, selected_datetime)
-                
-                # Use the historical data
-                working_df = historical_df
-                
-                # Create entity progress dataframe for historical data
-                working_entity_progress = pd.DataFrame({
-                    'Entity': working_df['Entity'],
-                    'Progress %': np.round((working_df['DSM Progress'] + working_df['DSL Progress']) / 2, 1)
-                })
-                
-                st.info(f"Showing progress as of {selected_date.strftime('%B %d, %Y')}")
-        else:
-            # Use the latest data
-            working_df = df_dsm_dsl
-            working_entity_progress = df_entity_progress
-            
-        # KPI Cards
-        avg_dsm = working_df['DSM Progress'].mean()
-        avg_dsl = working_df['DSL Progress'].mean()
-        top_entity = working_entity_progress.loc[working_entity_progress['Progress %'].idxmax()]
-
-        col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
-        col_kpi1.metric("📈 Avg DSM Progress", f"{avg_dsm:.1f}%")
-        col_kpi2.metric("📉 Avg DSL Progress", f"{avg_dsl:.1f}%")
-        col_kpi3.metric("🏆 Top Entity", f"{top_entity['Entity']} ({top_entity['Progress %']}%)")
-
-        col1, col2 = st.columns([1, 1])
-
-        with col1:
-            # Create a dataframe format suitable for side-by-side bars in Plotly
-            df_comparison = pd.melt(
-                working_df, 
-                id_vars=['Entity'], 
-                value_vars=['DSM Progress', 'DSL Progress'],
-                var_name='Type', 
-                value_name='Progress'
-            )
-            # Clean up the "Type" column
-            df_comparison['Type'] = df_comparison['Type'].str.replace(' Progress', '')
-            
-            # Using Plotly for consistency
-            fig1 = px.bar(
-                df_comparison,
-                x='Entity', 
-                y='Progress',
-                color='Type',
-                barmode='group',
-                title="DSM vs DSL Progress by Entity",
-                labels={'Progress': 'Progress (%)'},
-                height=400
-            )
-            # Set y-axis to go from 0 to 100
-            fig1.update_layout(yaxis=dict(range=[0, 100]))
-            st.plotly_chart(fig1, use_container_width=True)
-
-        with col2:
-            fig2 = px.bar(
-                working_entity_progress, 
-                x='Entity', 
-                y='Progress %',
-                title="Overall Progress by Entity", 
-                height=400,
-                color='Entity'
-            )
-            fig2.update_layout(showlegend=False, yaxis=dict(range=[0, 100]))
-            st.plotly_chart(fig2, use_container_width=True)
-            
-        # If showing historical data, add comparison with current
-        if view_type == "Historical Progress":
-            st.subheader("Historical vs. Current Comparison")
-            
-            # Create comparison dataframe
-            hist_values = {entity: progress for entity, progress in zip(working_entity_progress['Entity'], working_entity_progress['Progress %'])}
-            current_values = {entity: progress for entity, progress in zip(df_entity_progress['Entity'], df_entity_progress['Progress %'])}
-            
-            comparison_data = []
-            for entity in hist_values.keys():
-                comparison_data.append({
-                    'Entity': entity,
-                    'Historical': hist_values[entity],
-                    'Current': current_values[entity],
-                    'Change': current_values[entity] - hist_values[entity]
-                })
-            
-            df_comparison = pd.DataFrame(comparison_data)
-            
-            # Display comparison
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                # Create comparison chart
-                df_melt = pd.melt(
-                    df_comparison,
-                    id_vars=['Entity'],
-                    value_vars=['Historical', 'Current'],
-                    var_name='Period',
-                    value_name='Progress'
-                )
-                
-                fig = px.bar(
-                    df_melt,
-                    x='Entity',
-                    y='Progress',
-                    color='Period',
-                    barmode='group',
-                    title=f"Progress Comparison: {selected_date.strftime('%B %Y')} vs Current",
-                    height=400
-                )
-                fig.update_layout(yaxis=dict(range=[0, 100]))
-                st.plotly_chart(fig, use_container_width=True)
-            
-            with col2:
-                # Display comparison table with metrics
-                st.markdown("### Progress Change")
-                
-                for _, row in df_comparison.iterrows():
-                    delta_color = "normal"
-                    if row['Change'] > 5:
-                        delta_color = "good"
-                    elif row['Change'] < 0:
-                        delta_color = "inverse"
-                        
-                    st.metric(
-                        f"{row['Entity']}",
-                        f"{row['Current']:.1f}%",
-                        f"{row['Change']:.1f}%",
-                        delta_color=delta_color
-                    )
-    else:
-        st.error("Data not available. Please check the data sources.")
-
-# --- Tab 2: Progress Over Time ---
-with tab_time:
-    st.subheader("📈 Progress Over Time")
-    
-    if df_time_based is not None:
-        # Adding an "All Entities" option
-        entity_options = ['All Entities'] + list(df_time_based['Entity'].unique())
-        selected_entity = st.selectbox("Select an Entity:", entity_options, key="time_entity")
+        # Entity counts chart
+        st.subheader("Entity Count Distribution")
         
-        # Add time granularity option
-        time_granularity = st.radio("Time Granularity:", ["Monthly", "Yearly"], horizontal=True)
-
-        # Filter based on selection
-        if selected_entity == 'All Entities':
-            filtered_df = df_time_based
-            title = "All Entities - DSM vs DSL Progress Over Time"
-        else:
-            filtered_df = df_time_based[df_time_based['Entity'] == selected_entity]
-            title = f"{selected_entity} - DSM vs DSL Progress Over Time"
-
-        # Apply time granularity
-        if time_granularity == "Yearly":
-            # Group by Year and Type
-            if selected_entity == 'All Entities':
-                chart_data = filtered_df.groupby(['Year', 'Type'], as_index=False)['Progress'].mean()
-                chart_data['Date_Display'] = pd.to_datetime(chart_data['Year'], format='%Y')
-            else:
-                chart_data = filtered_df.groupby(['Year', 'Entity', 'Type'], as_index=False)['Progress'].mean()
-                chart_data['Date_Display'] = pd.to_datetime(chart_data['Year'], format='%Y')
-            
-            x_axis = 'Year'
-        else:  # Monthly
-            # Use the actual dates for monthly view
-            if selected_entity == 'All Entities':
-                # Group by year and month
-                chart_data = filtered_df.groupby([
-                    filtered_df['Year'], 
-                    filtered_df['Month'], 
-                    'Type'
-                ], as_index=False)['Progress'].mean()
-                
-                # Create proper date column for display
-                chart_data['Date_Display'] = pd.to_datetime(
-                    chart_data['Year'].astype(str) + '-' + chart_data['Month'].astype(str) + '-01'
-                )
-            else:
-                chart_data = filtered_df.copy()
-                chart_data['Date_Display'] = chart_data['Date']
-            
-            x_axis = 'Date_Display'
-
-        fig_line = px.line(
-            chart_data,
-            x=x_axis, 
-            y='Progress',
-            color='Type',
-            markers=True,
-            title=title,
-            labels={'Progress': 'Progress (%)', 'Date_Display': 'Date', 'Year': 'Year'},
+        fig = px.bar(
+            df_current, 
+            x='Entity', 
+            y='Total',
+            color='Entity',
+            text='Total',
+            title="Total Entity Counts",
             height=500
         )
         
-        # Add dots at data points
-        fig_line.update_traces(mode='lines+markers')
+        fig.update_traces(texttemplate='%{text:,}', textposition='outside')
+        fig.update_layout(uniformtext_minsize=10, uniformtext_mode='hide')
         
-        # Improve layout
-        fig_line.update_layout(
-            yaxis=dict(range=[0, 100]),
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Entity percentage distribution
+        st.subheader("Entity Distribution")
+        
+        fig = px.pie(
+            df_current,
+            values='Total',
+            names='Entity',
+            title="Entity Distribution (%)",
+            height=500
         )
         
-        st.plotly_chart(fig_line, use_container_width=True)
+        fig.update_traces(textinfo='percent+label')
+        
+        col1, col2 = st.columns([2, 1])
+        col1.plotly_chart(fig, use_container_width=True)
+        
+        # Entity count table
+        col2.subheader("Entity Count Details")
+        col2.dataframe(
+            df_current[['Entity', 'Total']].sort_values('Total', ascending=False),
+            hide_index=True,
+            column_config={
+                "Entity": "Entity Type",
+                "Total": st.column_config.NumberColumn("Total Count", format="%d")
+            },
+            use_container_width=True
+        )
+        
     else:
-        st.error("Time series data not available.")
+        st.error("Error loading entity count data.")
 
-# --- Tab 3: Comparison ---
-with tab_compare:
-    st.subheader("📊 DSM vs DSL Comparison")
+# --- Tab 2: DSL vs DSM Comparison ---
+with tab_comparison:
+    st.header("DSL vs DSM Interface Comparison")
     
-    if df_time_based is not None:
-        # Adding an "All Entities" option
-        entity_options = ['All Entities'] + list(df_time_based['Entity'].unique())
-        selected_entity_bar = st.selectbox("Select an Entity:", entity_options, key="compare_entity")
-
-        # Date range selection
-        col1, col2 = st.columns(2)
+    if df_current is not None and df_current_melted is not None:
+        # Calculate gap metrics
+        total_gap = df_current['DSL_DSM_Gap'].sum()
+        max_gap_entity = df_current.loc[df_current['DSL_DSM_Gap'].idxmax()]['Entity']
+        max_gap_value = df_current.loc[df_current['DSL_DSM_Gap'].idxmax()]['DSL_DSM_Gap']
+        gap_percentage = (total_gap / df_current['DSL'].sum()) * 100
+        
+        # Display overall metrics
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total DSL-DSM Gap", f"{total_gap:,}")
+        col2.metric("Biggest Gap Entity", f"{max_gap_entity} ({max_gap_value:,})")
+        col3.metric("Gap Percentage", f"{gap_percentage:.1f}%")
+        
+        # DSL vs DSM comparison by entity
+        st.subheader("DSL vs DSM Counts by Entity")
+        
+        fig = px.bar(
+            df_current_melted,
+            x='Entity',
+            y='Count',
+            color='Interface',
+            barmode='group',
+            text='Count',
+            title="DSL vs DSM Entity Counts",
+            height=500
+        )
+        
+        fig.update_traces(texttemplate='%{text:,}', textposition='outside')
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Display gap analysis
+        st.subheader("DSL-DSM Gap Analysis")
+        
+        col1, col2 = st.columns([3, 2])
+        
         with col1:
-            start_date = st.date_input(
-                "Start Date:", 
-                value=df_time_based['Date'].min().date(),
-                min_value=df_time_based['Date'].min().date(),
-                max_value=df_time_based['Date'].max().date()
+            # Create gap chart
+            fig = px.bar(
+                df_current,
+                x='Entity',
+                y='DSL_DSM_Gap',
+                color='Entity',
+                text='DSL_DSM_Gap',
+                title="Gap Between DSL and DSM Counts",
+                height=400
             )
+            
+            fig.update_traces(texttemplate='%{text:,}', textposition='outside')
+            st.plotly_chart(fig, use_container_width=True)
         
         with col2:
-            end_date = st.date_input(
-                "End Date:", 
-                value=df_time_based['Date'].max().date(),
-                min_value=df_time_based['Date'].min().date(),
-                max_value=df_time_based['Date'].max().date()
+            # Calculate gap percentages
+            df_gap = df_current.copy()
+            df_gap['Gap_Percentage'] = (df_gap['DSL_DSM_Gap'] / df_gap['DSL'] * 100).round(1)
+            
+            # Sort by gap percentage
+            df_gap = df_gap.sort_values('Gap_Percentage', ascending=False)
+            
+            # Create KPI cards for each entity
+            st.markdown("### Gap Percentage by Entity")
+            
+            for _, row in df_gap.iterrows():
+                gap = row["Gap_Percentage"]
+                delta_color = "normal"
+    
+                # Color logic
+                if gap > 15:
+                    delta_color = "normal"  # Red (↑ is bad)
+                elif gap < 5:
+                    gap = -gap       
+                
+                st.metric(
+                    label=f"{row['Entity']} Gap ({row['Gap_Percentage']}%)",
+                    value=f"{row['DSL_DSM_Gap']:,}",
+                    delta=row["Gap_Percentage"],  # still a number here
+                    delta_color=delta_color,
+                    help=f"Difference between DSL ({row['DSL']:,}) and DSM ({row['DSM']:,}) counts"
+)
+        
+        # DSL vs DSM detailed comparison
+        st.subheader("Detailed Interface Comparison")
+        
+        # Create comparison table
+        comparison_df = df_current[['Entity', 'DSL', 'DSM', 'DSL_DSM_Gap']].copy()
+        comparison_df['Gap_Percentage'] = (comparison_df['DSL_DSM_Gap'] / comparison_df['DSL'] * 100).round(1)
+        comparison_df['Completion_Rate'] = ((comparison_df['DSM'] / comparison_df['DSL']) * 100).round(1)
+        
+        # Highlight cells based on values
+        def highlight_gaps(val):
+            if isinstance(val, (int, float)):
+                if 'Gap_Percentage' in comparison_df.columns and val > 15:
+                    return 'background-color: rgba(255, 0, 0, 0.2)'
+                elif 'Completion_Rate' in comparison_df.columns and val < 85:
+                    return 'background-color: rgba(255, 0, 0, 0.2)'
+            return ''
+        
+        # Display styled table
+        st.dataframe(
+            comparison_df.style.applymap(highlight_gaps),
+            column_config={
+                "Entity": "Entity Type",
+                "DSL": st.column_config.NumberColumn("DSL Count", format="%d"),
+                "DSM": st.column_config.NumberColumn("DSM Count", format="%d"),
+                "DSL_DSM_Gap": st.column_config.NumberColumn("Count Gap", format="%d"),
+                "Gap_Percentage": st.column_config.NumberColumn("Gap %", format="%.1f%%"),
+                "Completion_Rate": st.column_config.NumberColumn("DSM Completion", format="%.1f%%")
+            },
+            use_container_width=True
+        )
+        
+    else:
+        st.error("Error loading comparison data.")
+
+# --- Tab 3: Historical Trends ---
+with tab_history:
+    st.header("Historical Trends Analysis")
+    
+    if df_history is not None:
+        # Filters
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            # Entity filter
+            entity_options = list(df_history['Entity'].unique())
+            selected_entity = st.selectbox("Select Entity:", entity_options, key="history_entity")
+        
+        with col2:
+            # Time period selection
+            time_period = st.selectbox(
+                "Time Period:", 
+                ["Last 30 Days", "Last 90 Days", "Last 180 Days", "All Time"],
+                key="history_time"
+            )
+        
+        with col3:
+            # Display options
+            display_option = st.radio(
+                "Display:",
+                ["Counts", "Gap Analysis"],
+                horizontal=True,
+                key="history_display"
+            )
+        
+        # Filter based on selection
+        entity_mask = (df_history['Entity'] == selected_entity)
+        
+        # Apply time filter
+        end_date = df_history['Date'].max()
+        
+        if time_period == "Last 30 Days":
+            start_date = end_date - timedelta(days=30)
+        elif time_period == "Last 90 Days":
+            start_date = end_date - timedelta(days=90)
+        elif time_period == "Last 180 Days":
+            start_date = end_date - timedelta(days=180)
+        else:  # All Time
+            start_date = df_history['Date'].min()
+        
+        date_mask = (df_history['Date'] >= start_date) & (df_history['Date'] <= end_date)
+        
+        # Combine filters
+        filtered_df = df_history[entity_mask & date_mask]
+        
+        # Create charts based on display option
+        if display_option == "Counts":
+            st.subheader(f"{selected_entity} Count Trends")
+            
+            # Melt the dataframe for plotting
+            plot_columns = ['Total', 'DSL', 'DSM']
+            df_plot = filtered_df.melt(
+                id_vars=['Date', 'Entity'],
+                value_vars=plot_columns,
+                var_name='Metric',
+                value_name='Count'
             )
             
-        # Convert to datetime
-        start_datetime = datetime.combine(start_date, datetime.min.time())
-        end_datetime = datetime.combine(end_date, datetime.min.time())
-        
-        if start_datetime > end_datetime:
-            st.warning("Start date cannot be after end date.")
-        else:
-            # Filter based on selections
-            time_mask = (df_time_based['Date'] >= start_datetime) & (df_time_based['Date'] <= end_datetime)
+            # Create line chart
+            fig = px.line(
+                df_plot,
+                x='Date',
+                y='Count',
+                color='Metric',
+                title=f"{selected_entity} Counts Over Time",
+                labels={'Count': 'Entity Count', 'Date': 'Date'},
+                height=500
+            )
             
-            if selected_entity_bar == 'All Entities':
-                filtered_df_bar = df_time_based[time_mask]
-                title = f"All Entities - DSM vs DSL Comparison ({start_date.strftime('%b %Y')} to {end_date.strftime('%b %Y')})"
-                
-                # Group by Year and Type for "All Entities"
-                chart_data = filtered_df_bar.groupby(['Year', 'Type'], as_index=False)['Progress'].mean()
-            else:
-                filtered_df_bar = df_time_based[
-                    (df_time_based['Entity'] == selected_entity_bar) & time_mask
-                ]
-                title = f"{selected_entity_bar} - DSM vs DSL Comparison ({start_date.strftime('%b %Y')} to {end_date.strftime('%b %Y')})"
-                
-                # Group by Year for single entity
-                chart_data = filtered_df_bar.groupby(['Year', 'Type'], as_index=False)['Progress'].mean()
+            fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            st.plotly_chart(fig, use_container_width=True)
             
-            if not chart_data.empty:
-                fig_bar = px.bar(
-                    chart_data,
-                    x='Year', 
-                    y='Progress', 
-                    color='Type',
-                    barmode='group',
-                    title=title,
-                    labels={'Progress': 'Progress (%)'},
-                    height=500
+            # Calculate current values
+            current_total = filtered_df.iloc[-1]['Total']
+            current_dsl = filtered_df.iloc[-1]['DSL']
+            current_dsm = filtered_df.iloc[-1]['DSM']
+            
+            # Calculate change over period
+            start_total = filtered_df.iloc[0]['Total']
+            start_dsl = filtered_df.iloc[0]['DSL']
+            start_dsm = filtered_df.iloc[0]['DSM']
+            
+            total_change = ((current_total / start_total) - 1) * 100
+            dsl_change = ((current_dsl / start_dsl) - 1) * 100
+            dsm_change = ((current_dsm / start_dsm) - 1) * 100
+            
+            # Display metrics
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Count", f"{current_total:,}", f"{total_change:.1f}%")
+            col2.metric("DSL Count", f"{current_dsl:,}", f"{dsl_change:.1f}%")
+            col3.metric("DSM Count", f"{current_dsm:,}", f"{dsm_change:.1f}%")
+            
+        else:  # Gap Analysis
+            st.subheader(f"{selected_entity} DSL-DSM Gap Trends")
+            
+            # Create line chart for gap
+            fig = px.line(
+                filtered_df,
+                x='Date',
+                y='DSL_DSM_Gap',
+                title=f"{selected_entity} DSL-DSM Gap Over Time",
+                labels={'DSL_DSM_Gap': 'Count Gap', 'Date': 'Date'},
+                height=500
+            )
+            
+            # Add DSL and DSM lines for reference
+            fig.add_trace(
+                go.Scatter(
+                    x=filtered_df['Date'],
+                    y=filtered_df['DSL'],
+                    name='DSL Count',
+                    line=dict(dash='dot')
                 )
-                
-                # Format the chart
-                fig_bar.update_layout(
-                    yaxis=dict(range=[0, 100]),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            
+            fig.add_trace(
+                go.Scatter(
+                    x=filtered_df['Date'],
+                    y=filtered_df['DSM'],
+                    name='DSM Count',
+                    line=dict(dash='dot')
                 )
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Calculate gap percentage over time
+            filtered_df['Gap_Percentage'] = (filtered_df['DSL_DSM_Gap'] / filtered_df['DSL'] * 100)
+            
+            # Create gap percentage chart
+            fig = px.line(
+                filtered_df,
+                x='Date',
+                y='Gap_Percentage',
+                title=f"{selected_entity} DSL-DSM Gap Percentage Over Time",
+                labels={'Gap_Percentage': 'Gap Percentage (%)', 'Date': 'Date'},
+                height=400
+            )
+            
+            # Add reference line at 10%
+            fig.add_hline(
+                y=10, 
+                line_dash="dash", 
+                line_color="red",
+                annotation_text="10% Threshold",
+                annotation_position="bottom right"
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Display current gap metrics
+            current_gap = filtered_df.iloc[-1]['DSL_DSM_Gap']
+            current_gap_pct = filtered_df.iloc[-1]['Gap_Percentage']
+            
+            # Calculate change in gap over period
+            start_gap = filtered_df.iloc[0]['DSL_DSM_Gap']
+            start_gap_pct = filtered_df.iloc[0]['Gap_Percentage']
+            
+            gap_change = current_gap - start_gap
+            gap_pct_change = current_gap_pct - start_gap_pct
+            
+            col1, col2 = st.columns(2)
+            
+            delta_color = "normal"
+            if gap_change > 0:
+                delta_color = "inverse"  # Gap increased (bad)
+            elif gap_change < 0:
+                delta_color = "good"     # Gap decreased (good)
                 
-                st.plotly_chart(fig_bar, use_container_width=True)
-            else:
-                st.warning("No data available for the selected filters.")
+            col1.metric(
+                "Current DSL-DSM Gap", 
+                f"{current_gap:,}", 
+                f"{gap_change:+,}", 
+                delta_color=delta_color
+            )
+            
+            delta_color = "normal"
+            if gap_pct_change > 0:
+                delta_color = "inverse"  # Gap percentage increased (bad)
+            elif gap_pct_change < 0:
+                delta_color = "good"     # Gap percentage decreased (good)
+                
+            col2.metric(
+                "Current Gap Percentage", 
+                f"{current_gap_pct:.1f}%", 
+                f"{gap_pct_change:+.1f}%", 
+                delta_color=delta_color
+            )
+            
     else:
-        st.error("Comparison data not available.")
+        st.error("Error loading historical data.")
 
 # Add footer information
 st.markdown("---")
-st.markdown("**Dashboard created with Streamlit** | Last updated: April 2025")
+st.markdown("**Entity Tracking Dashboard** | Last updated: April 2025")
