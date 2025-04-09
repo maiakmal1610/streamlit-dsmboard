@@ -192,18 +192,20 @@ with tab_overview:
 with tab_comparison:
     st.header("DSL vs DSM Interface Comparison")
     
-    if df_current is not None and df_current_melted is not None:
-        # Calculate gap metrics
-        total_gap = df_current['DSL_DSM_Gap'].sum()
-        max_gap_entity = df_current.loc[df_current['DSL_DSM_Gap'].idxmax()]['Entity']
-        max_gap_value = df_current.loc[df_current['DSL_DSM_Gap'].idxmax()]['DSL_DSM_Gap']
-        gap_percentage = (total_gap / df_current['DSL'].sum()) * 100
+    if df_current is not None:
+        # MODIFIED: Replace KPI cards with entity count breakdowns
+        # Get entity counts
+        bp_count = df_current[df_current['Entity'] == 'BP']['Total'].values[0]
+        ub_count = df_current[df_current['Entity'] == 'UB']['Total'].values[0]
+        tk_count = df_current[df_current['Entity'] == 'TK']['Total'].values[0]
+        pp_count = df_current[df_current['Entity'] == 'PP']['Total'].values[0]
         
-        # Display overall metrics
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total DSL-DSM Gap", f"{total_gap:,}")
-        col2.metric("Biggest Gap Entity", f"{max_gap_entity} ({max_gap_value:,})")
-        col3.metric("Gap Percentage", f"{gap_percentage:.1f}%")
+        # KPI metrics - replaced with entity-specific counts
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("BP (Blok Penghitungan)", f"{bp_count:,}")
+        col2.metric("UB (Unit Bangunan)", f"{ub_count:,}")
+        col3.metric("TK (Tempat Kediaman)", f"{tk_count:,}")
+        col4.metric("PP (Pertubuhan Perniagaan)", f"{pp_count:,}")
         
         # DSL vs DSM comparison by entity
         st.subheader("DSL vs DSM Counts by Entity")
