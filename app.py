@@ -255,19 +255,22 @@ with tab_comparison:
             st.markdown("### Gap Percentage by Entity")
             
             for _, row in df_gap.iterrows():
+                gap = row["Gap_Percentage"]
                 delta_color = "normal"
-                if row['Gap_Percentage'] > 15:
-                    delta_color = "inverse"  # Red for large gaps
-                elif row['Gap_Percentage'] < 5:
-                    delta_color = "good"     # Green for small gaps
+    
+                # Color logic
+                if gap > 15:
+                    delta_color = "normal"  # Red (↑ is bad)
+                elif gap < 5:
+                    gap = -gap       
                 
                 st.metric(
-                    f"{row['Entity']} Gap",
-                    f"{row['DSL_DSM_Gap']:,}",
-                    row["Gap_Percentage"],
+                    label=f"{row['Entity']} Gap ({row['Gap_Percentage']}%)",
+                    value=f"{row['DSL_DSM_Gap']:,}",
+                    delta=row["Gap_Percentage"],  # still a number here
                     delta_color=delta_color,
                     help=f"Difference between DSL ({row['DSL']:,}) and DSM ({row['DSM']:,}) counts"
-                )
+)
         
         # DSL vs DSM detailed comparison
         st.subheader("Detailed Interface Comparison")
